@@ -32,11 +32,9 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/python_app",
         alias="DATABASE_URL",
     )
     database_url_sync: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/python_app",
         alias="DATABASE_URL_SYNC",
     )
 

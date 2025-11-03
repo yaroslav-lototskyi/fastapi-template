@@ -8,10 +8,11 @@ The domain layer defines the contract (interface),
 while the infrastructure layer provides the concrete implementation.
 """
 from abc import abstractmethod
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from src.core.domain.repositories import BaseRepository
 from src.modules.users.domain.entities import UserEntity
+from src.modules.users.domain.value_objects import UserListCriteria
 
 
 class IUserRepository(BaseRepository[UserEntity]):
@@ -44,4 +45,19 @@ class IUserRepository(BaseRepository[UserEntity]):
     @abstractmethod
     async def username_exists(self, username: str) -> bool:
         """Check if username already exists."""
+        pass
+
+    @abstractmethod
+    async def find_all_by_criteria(
+        self, criteria: UserListCriteria
+    ) -> Tuple[List[UserEntity], int]:
+        """
+        Find users by criteria (Domain-driven approach).
+
+        Args:
+            criteria: Search criteria containing business rules (pagination, sorting)
+
+        Returns:
+            Tuple of (list of users, total count)
+        """
         pass

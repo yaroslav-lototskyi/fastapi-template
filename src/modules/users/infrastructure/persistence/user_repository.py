@@ -9,13 +9,15 @@ This follows Dependency Inversion Principle:
 - Infrastructure implements interface (UserRepository)
 - Use cases depend on interface, not implementation
 """
-from typing import Optional, List
+import asyncio
+from typing import Optional, List, Tuple
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.users.domain.entities import UserEntity
 from src.modules.users.domain.repositories import IUserRepository
+from src.modules.users.domain.value_objects import UserListCriteria, SortField, SortOrder
 from .user_model import UserModel
 
 
@@ -61,15 +63,16 @@ class UserRepository(IUserRepository):
         self, skip: int = 0, limit: int = 100
     ) -> tuple[List[UserEntity], int]:
         """Find all users with pagination."""
-        # Get total count
-        count_result = await self.session.execute(select(func.count(UserModel.id)))
-        total = count_result.scalar_one()
-
-        # Get paginated users
-        result = await self.session.execute(
-            select(UserModel).order_by(UserModel.created_at.desc()).offset(skip).limit(limit)
+        # Execute both queries in parallel for better performance
+        count_result, data_result = await asyncio.gather(
+            self.session.execute(select(func.count(UserModel.id))),
+            self.session.execute(
+                select(UserModel).order_by(UserModel.created_at.desc()).offset(skip).limit(limit)
+            ),
         )
-        models = list(result.scalars().all())
+
+        total = count_result.scalar_one()
+        models = list(data_result.scalars().all())
 
         entities = [self._model_to_entity(model) for model in models]
         return entities, total
@@ -142,6 +145,49 @@ class UserRepository(IUserRepository):
         )
         count = result.scalar_one()
         return count > 0
+
+    async def find_all_by_criteria(
+        self, criteria: UserListCriteria
+    ) -> Tuple[List[UserEntity], int]:
+        """
+        Find users by criteria (improved approach with domain object).
+
+        This method receives business rules from domain layer via criteria object.
+        Infrastructure only translates domain concepts to SQL.
+        """
+        # Build query with sorting based on domain criteria
+        query = select(UserModel)
+
+        # Apply sorting (translate domain field to database column)
+        sort_column = self._get_sort_column(criteria.sort_field)
+        if criteria.sort_order == SortOrder.ASC:
+            query = query.order_by(asc(sort_column))
+        else:
+            query = query.order_by(desc(sort_column))
+
+        # Apply pagination
+        query = query.offset(criteria.skip).limit(criteria.limit)
+
+        # Execute both queries in parallel for better performance
+        count_result, data_result = await asyncio.gather(
+            self.session.execute(select(func.count(UserModel.id))),
+            self.session.execute(query),
+        )
+
+        total = count_result.scalar_one()
+        models = list(data_result.scalars().all())
+
+        entities = [self._model_to_entity(model) for model in models]
+        return entities, total
+
+    def _get_sort_column(self, sort_field: SortField):
+        """Map domain SortField to database column (infrastructure concern)."""
+        mapping = {
+            SortField.CREATED_AT: UserModel.created_at,
+            SortField.EMAIL: UserModel.email,
+            SortField.USERNAME: UserModel.username,
+        }
+        return mapping[sort_field]
 
     # Mappers
 

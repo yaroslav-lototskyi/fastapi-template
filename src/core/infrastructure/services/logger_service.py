@@ -6,7 +6,7 @@ Provides structured JSON logging for production and human-readable logs for deve
 """
 import sys
 import structlog
-from typing import Any, Dict
+from typing import Any
 from structlog.types import FilteringBoundLogger
 
 
